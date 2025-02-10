@@ -5,11 +5,14 @@ import os
 import ee
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2.credentials import Credentials
+from database import usuario_existe, guardar_usuario
+from google.auth.transport.requests import Request
 
-# ------------------- AUTENTICACIÓN GOOGLE OAUTH (USUARIO) -------------------
 
-# Ruta al archivo JSON de credenciales de OAuth
+# Ruta a los archivos JSON
 OAUTH_CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "../client_secret.json")
+TOKEN_FILE = os.path.join(os.path.dirname(__file__), "../user_token.json")  # Guardaremos el token aquí
 
 class GoogleLogin(QMainWindow):
     def __init__(self):
@@ -29,10 +32,18 @@ class GoogleLogin(QMainWindow):
 
         self.user_info = None
 
+        # Intentar cargar credenciales guardadas
+        self.load_saved_credentials()
+
+
     def authenticate(self):
         """Autenticación con Google usando OAuth"""
-        SCOPES = ["https://www.googleapis.com/auth/userinfo.profile",
-                  "https://www.googleapis.com/auth/userinfo.email", "openid"]
+        SCOPES = [
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "openid",
+            "https://www.googleapis.com/auth/drive.file"  # 🚀 Permiso para escribir en Google Drive
+        ]
 
         if not os.path.exists(OAUTH_CREDENTIALS_FILE):
             self.label.setText("Error: No se encontró el archivo de credenciales OAuth")
@@ -42,6 +53,10 @@ class GoogleLogin(QMainWindow):
             flow = InstalledAppFlow.from_client_secrets_file(OAUTH_CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0)
 
+            # Guardar credenciales en JSON
+            with open(TOKEN_FILE, "w") as token_file:
+                token_file.write(creds.to_json())  # Guarda todo, incluido el refresh_token
+
             # Obtener información del usuario autenticado
             user_info = requests.get(
                 "https://www.googleapis.com/oauth2/v1/userinfo",
@@ -49,13 +64,47 @@ class GoogleLogin(QMainWindow):
             ).json()
 
             self.user_info = user_info
-            self.label.setText(f"Bienvenido, {user_info['name']}!")
 
-            # Redirigir al panel de control con el usuario autenticado
+            # Verificar si el usuario ya existe en la base de datos
+            if not usuario_existe(user_info["email"]):
+                print("Nuevo usuario detectado. Creando cuenta...")
+                guardar_usuario(user_info["id"], user_info["name"], user_info["email"], user_info["picture"])
+            else:
+                print(f"Bienvenido de nuevo, {user_info['name']}!")
+
+            self.label.setText(f"Bienvenido, {user_info['name']}!")
             self.open_dashboard(user_info)
 
         except Exception as e:
             self.label.setText(f"Error: {str(e)}")
+
+
+def load_saved_credentials(self):
+    """Carga credenciales guardadas y solo inicia sesión si el token sigue siendo válido."""
+    if os.path.exists(TOKEN_FILE):
+        try:
+            with open(TOKEN_FILE, "r") as token_file:
+                creds_data = json.load(token_file)
+
+            creds = Credentials.from_authorized_user_info(creds_data)
+
+            # Verificamos si el token sigue siendo válido
+            if creds and creds.valid:
+                print("✅ Sesión encontrada. Iniciando sin autenticación.")
+                self.label.setText("Sesión encontrada. Ingresando...")
+
+                self.user_info = requests.get(
+                    "https://www.googleapis.com/oauth2/v1/userinfo",
+                    headers={"Authorization": f"Bearer {creds.token}"}
+                ).json()
+
+                self.open_dashboard(self.user_info)
+            else:
+                print("🔴 Token expirado, se requiere autenticación nueva.")
+                self.label.setText("Tu sesión ha caducado. Inicia sesión nuevamente.")
+
+        except Exception as e:
+            print(f"⚠️ Error al cargar credenciales guardadas: {e}")
 
     def open_dashboard(self, user_info):
         """Abrir el panel de control después de iniciar sesión"""
@@ -64,31 +113,3 @@ class GoogleLogin(QMainWindow):
         self.dashboard = Dashboard(user_info)
         self.dashboard.show()
 
-
-# ------------------- AUTENTICACIÓN GOOGLE EARTH ENGINE -------------------
-
-# Ruta al archivo JSON de credenciales de Earth Engine
-EARTH_ENGINE_CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "../Earth Engine.json")
-
-def autenticar_google_earth_engine():
-    """Autentica Google Earth Engine usando el archivo JSON de servicio."""
-    if not os.path.exists(EARTH_ENGINE_CREDENTIALS_FILE):
-        print("❌ Error: No se encontró el archivo de credenciales de Earth Engine.")
-        return
-
-    try:
-        ee.Initialize(ee.ServiceAccountCredentials(None, EARTH_ENGINE_CREDENTIALS_FILE))
-        print("✅ Autenticación con Google Earth Engine exitosa")
-    except Exception as e:
-        print(f"❌ Error en la autenticación de Google Earth Engine: {e}")
-
-# ------------------- INICIO DEL PROGRAMA -------------------
-if __name__ == "__main__":
-    # Primero autenticamos Google Earth Engine
-    autenticar_google_earth_engine()
-    
-    # Luego iniciamos la aplicación con autenticación de usuario
-    app = QApplication(sys.argv)
-    window = GoogleLogin()
-    window.show()
-    sys.exit(app.exec_())

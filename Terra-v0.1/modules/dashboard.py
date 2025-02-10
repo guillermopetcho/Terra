@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QGridLayout, QFrame
-from .forms.control import ControlForm  # Cambio aquí: Usamos importación relativa
+from .forms.control import ControlForm  # Correctamente importado
 from .forms.chat_ia import ChatIAForm
 from .forms.visualizacion_agricola import VisualizacionAgricolaForm
 from .forms.analisis import AnalisisForm
@@ -23,7 +23,7 @@ class Dashboard(QMainWindow):
         layout = QGridLayout()
 
         # Cargar cada frame desde su formulario correspondiente
-        self.section1 = self.create_frame(ControlForm(self.user_info))
+        self.section1 = self.create_frame(ControlForm(self.user_info))  # Aquí se importa desde control.py
         self.section2 = self.create_frame(ChatIAForm())
         self.section3 = self.create_frame(VisualizacionAgricolaForm())
         self.section4 = self.create_frame(AnalisisForm())
@@ -51,7 +51,10 @@ class Dashboard(QMainWindow):
         frame.setLayout(frame_layout)
         return frame
 
+
 # Para pruebas individuales
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    dashboard = Dashboard({"name": "Invitado"})  # Inicia co
+    dashboard = Dashboard({"name": "Invitado"})  # Inicia con usuario "Invitado"
+    dashboard.show()
+    sys.exit(app.exec_())

@@ -1,5 +1,7 @@
 Terra-v0.1/client_secret.json
-Terra-v0.1/Earth Engine.json
+Terra-v0.1/credentials/drive_credentials.json
+Terra-v0.1/credentials/viejas/Earth Engine.json
 Terra-v0.1/config.py
 Terra-v0.1/__pycache__
+Terra-v0.1/modules/__pycache__
 venv-0.1
